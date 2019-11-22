@@ -1,0 +1,542 @@
+来自拍拍贷的业务数据分析
+========================================================
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, packages}
+library(ggplot2)
+library(knitr)
+library(gridExtra)
+library(showtext)
+showtext_auto(enable = TRUE)
+theme(text = element_text(family = 'STKaiti'))
+```
+
+# 收集数据
+```{r echo=FALSE, Load_the_Data}
+lc <- read.csv('LC.csv', fileEncoding = 'UTF-8')
+```
+
+#评估数据
+```{r echo=FALSE, Summary}
+summary(lc)
+```
+
+#清洗数据
+
+```{r echo=FALSE}
+# 对日期进行分组 
+lc$年<-format(as.Date(lc$借款成功日期),'%y')
+lc$月<-format(as.Date(lc$借款成功日期),'%m')
+lc$日<-format(as.Date(lc$借款成功日期),'%d')
+```
+
+```{r echo=FALSE}
+# 设置初始评级的等级，等级从低到高依次为F,E,D,C,B,A
+lc$初始评级 <- factor(lc$初始评级, levels = c('F', 'E', 'D', 'C', 'B', 'A'), ordered=T)
+```
+
+```{r echo=FALSE}
+# 统计借款人的认证方式种数, 最高分数为6，最低分数为0
+lc$认证评分 <- (lc$手机认证=='成功认证') + (lc$户口认证=='成功认证') + 
+               (lc$视频认证=='成功认证') + (lc$学历认证=='成功认证') + 
+               (lc$征信认证=='成功认证') + (lc$淘宝认证=='成功认证')
+```
+
+# Univariate Plots Section
+
+```{r echo=FALSE}
+# 观察借款人的年龄分布
+summary(lc$年龄)
+```
+
+观察到借款人的年龄范围是17-56岁。
+
+```{r echo=FALSE}
+# 设置借款人的年龄分组
+lc$年龄段 <- cut(lc$年龄,breaks=c(17,22,27,32,37,42,47,52,57),include.lowest=T)
+```
+
+```{r echo=FALSE}
+# 统计借款人的年龄分组
+summary(lc$年龄段)
+```
+
+```{r echo=FALSE}
+# 观察借款人的年龄分布,设置95%置信区间
+ggplot(aes(x=年龄), data=lc)+
+  geom_histogram(binwidth = 1)+
+  scale_x_continuous(breaks = seq(17, 57, 1))+ 
+  geom_vline(xintercept = quantile(lc$年龄,probs=0.025,na.rm=T),
+             linetype='dashed', color='red')+ 
+  geom_vline(xintercept = quantile(lc$年龄,probs=0.975,na.rm=T),
+             linetype='dashed', color='red')+
+  xlab('age')
+```
+
+借款人年龄分布在17-56岁之间，其中95%的借款人年龄分布在20-46岁之间,说明借款人主要以青壮年为主。
+
+```{r echo=FALSE}
+# 统计借款人的性别
+summary(lc$性别)
+```
+
+```{r echo=FALSE}
+# 观察借款人的性别分布，选用频数直方图
+ggplot(aes(x=性别),data = lc,family='STXihei')+
+  geom_bar()+
+  xlab('gender')
+```
+
+男性借款人的数量大约是女性借款人数量的2倍，说明男性借款人更喜欢从拍拍贷上借款。
+
+```{r echo=FALSE}
+summary(lc$借款金额)
+```
+
+借款金额在100-500000元之间，上四分数为5230，说明75%的借款金额在5500元以下。
+
+```{r echo=FALSE}
+# 观察借款金额的分布，选用频率直方图，设置95%置信区间
+ggplot(aes(x=借款金额), data=lc)+
+  geom_histogram(bins = 50)+
+  scale_x_log10(breaks = c(0,100,500,1000,2000,5000,12000,30000,100000,500000))+ 
+  geom_vline(xintercept = quantile(lc$借款金额,probs=0.025,na.rm=T),
+             linetype='dashed', color='red')+ 
+  geom_vline(xintercept = quantile(lc$借款金额,probs=0.975,na.rm=T),
+             linetype='dashed', color='red') +
+  xlab('loan amount')
+```
+
+95%置信区间的借款金额在500-12000元之间，说明借款金额主要集中在500-12000元之间。
+
+```{r echo=FALSE}
+summary(lc$借款期限)
+```
+
+```{r echo=FALSE}
+# 观察借款期限的分布，选用频率直方图
+ggplot(aes(x=借款期限), data=lc) +
+  geom_histogram(binwidth = 1) +
+  scale_x_continuous(breaks = seq(1, 25, 1)) +
+  xlab('loan period')
+```
+
+借款期限大部分为一年(12个月)和半年(6个月)，有少量9个月的借款。
+
+```{r echo=FALSE}
+summary(lc$借款利率)
+``` 
+
+```{r echo=FALSE}
+# 观察借款利率的分布，选用频率直方图
+ggplot(aes(x=借款利率), data=lc, family) +
+  geom_histogram(binwidth = 1) +
+  scale_x_continuous(breaks = seq(5, 25, 1)) +
+  xlab('loan rate')
+```
+
+借款利率绝大多数在16-24%之间，主要集中在20%和22%。
+
+```{r echo=FALSE}
+# 观察初始评级的分布，选用频率直方图
+ggplot(aes(x=初始评级), data=lc) +
+  geom_bar() +
+  xlab('initial evaluation')
+```
+
+大部分借款人的初始评级为C或D。
+
+```{r echo=FALSE}
+# 统计初始认证评分
+summary(lc$认证评分)
+```
+
+```{r echo=FALSE}
+# 观察6种认证方式的分布，采用直方图
+lc_phone<-ggplot(aes(x=手机认证),data=lc)+geom_bar()+xlab('phone')
+lc_account<-ggplot(aes(x=户口认证),data=lc)+geom_bar()+xlab('household')
+lc_video<-ggplot(aes(x=视频认证),data=lc)+geom_bar()+xlab('video')
+lc_edu<-ggplot(aes(x=学历认证),data=lc)+geom_bar()+xlab('education')
+lc_credit<-ggplot(aes(x=征信认证),data=lc)+geom_bar()+xlab('credit')
+lc_taobao<-ggplot(aes(x=淘宝认证),data=lc)+geom_bar()+xlab('taobao')
+grid.arrange(lc_phone,lc_account,lc_video,lc_edu,
+             lc_credit,lc_taobao,ncol=2)
+```
+
+```{r echo=FALSE}
+# 观察认证评分的分布，选用直方图
+ggplot(aes(x=认证评分),data=lc)+geom_bar() +
+  xlab('score') +
+  scale_x_continuous(breaks = seq(0, 6, 1))
+```
+
+通过手机认证和学历认证的借款人比较多，大多数人通过的认证方式不多于2种。
+
+```{r echo=FALSE}
+# 观察历史成功借款次数的统计数据
+summary(lc$历史成功借款次数)
+```
+
+```{r echo=FALSE}
+# 观察借款人的历史成功借款次数分布，设置95%置信区间
+ggplot(aes(x=历史成功借款次数),data=subset(lc,历史成功借款次数>=1))+
+  geom_histogram(binwidth=1)+
+  scale_x_continuous(limits = c(0,40), breaks=seq(0,40,1))+
+  scale_y_sqrt()+
+  geom_vline(xintercept =quantile(lc$历史成功借款次数,probs=0.95,na.rm=T),
+             linetype='dashed',color='red')+
+  xlab('number of historical successful borrowings')
+```
+
+95%置信区间的历史成功借款次数在7次以下。
+
+```{r echo=FALSE}
+# 观察历史成功借款金额的统计数据
+summary(lc$历史成功借款金额, lc$历史成功借款次数>0)
+```
+
+```{r echo=FALSE}
+# 观察历史成功借款金额的分布，选用直方图，设置95%置信区间
+ggplot(aes(x=历史成功借款金额),data=subset(lc,历史成功借款次数>0))+
+  geom_histogram(binwidth=1)+
+  scale_x_sqrt(limits = c(0, 40000), breaks=seq(0, 40000, 10000))+
+  geom_vline(xintercept =quantile(lc$历史成功借款金额,probs=0.95,na.rm=T),
+             linetype='dashed',color='red')+
+  xlab('historical successful loan amount')
+```
+
+95%置信区间的历史成功借款金额数在30000元以下。
+
+```{r echo=FALSE, Summary_Total_Principal}
+# 观察总待还本金的统计数据
+summary(lc$总待还本金)
+```
+
+```{r echo=FALSE}
+# 观察总待还本金的分布，选用直方图，设置95%置信区间
+ggplot(aes(x=总待还本金),data=subset(lc,总待还本金> 0))+
+  geom_histogram(bins=10)+
+  scale_x_sqrt(limits = c(0, 40000), breaks=c(0, 1000, 8000, 12000, 20000, 40000))+
+  geom_vline(xintercept =quantile(lc$总待还本金,probs=0.95,na.rm=T),
+             linetype='dashed',color='red')+
+  xlab('total unpaid principal')
+```
+
+95%置信区间的总待还本金在12000元以下。
+
+```{r echo=FALSE}
+# 观察历史正常还款期数的统计数据
+summary(lc$历史正常还款期数)
+```
+
+```{r echo=FALSE}
+# 观察历史正常还款期数的分布，选用直方图，设置95%置信区间
+ggplot(aes(x=历史正常还款期数),data=subset(lc,历史正常还款期数> 0))+
+  geom_histogram(binwidth=1)+
+  scale_x_continuous(limits = c(0, 50))+
+  geom_vline(xintercept =quantile(lc$历史正常还款期数,probs=0.95,na.rm=T),
+             linetype='dashed',color='red')+
+  xlab('historical normal repayment period')
+```
+
+95%置信区间的历史正常还款期数在40个月以下。
+
+```{r echo=FALSE}
+# 观察历史逾期还款期数的统计数据
+summary(lc$历史逾期还款期数)
+```
+
+```{r echo=FALSE}
+# 判断借款人是否有历史逾期还款期数的历史记录
+summary(lc$历史逾期还款期数>=1)
+```
+
+```{r echo=FALSE}
+# 观察历史逾期还款期数的分布
+ggplot(aes(x=历史逾期还款期数),data=subset(lc,历史逾期还款期数>=1))+
+  geom_histogram(binwidth=1)+
+  scale_x_continuous(breaks=seq(0,60,2))+
+  xlab('number of historical overdue repayment periods')
+```
+
+大部分借款人能按期交还。
+
+```{r echo=FALSE}
+# 观察借款日期的分布
+lc_year<-ggplot(aes(x=年),data=lc)+ geom_bar()+xlab('year')
+lc_month<-ggplot(aes(x=月),data=lc)+ geom_bar()+xlab('month')
+lc_day<-ggplot(aes(x=日),data=lc)+ geom_bar()+xlab('day')
+grid.arrange(lc_year,lc_month,lc_day,ncol=1)
+```
+
+16年借款的人数最多，借款人在年初和年底借款的成功率较高。
+
+# Univariate Analysis
+
+### What is the structure of your dataset?
+初始评级: F, E, D, C, B, A
+
+### What is/are the main feature(s) of interest in your dataset?
+借款利率，借款金额。
+
+### What other features in the dataset do you think will help support your investigation into your feature(s) of interest?
+可能影响借款利率的因素有借款金额，借款期限，初始评级，借款类型等；
+可能影响借款金额的因素有初始评级，年龄，历史成功借款金额 总待还本金，历史逾期还款期数等。
+
+### Did you create any new variables from existing variables in the dataset?
+从借款成功日期提取了年，月，日，从年龄中提取了借款人的年龄段。
+
+### Of the features you investigated, were there any unusual distributions? Did you perform any operations on the data to tidy, adjust, or change the form of the data? If so, why did you do this?
+设置初始评级，计算认证评分
+
+# Bivariate Plots Section
+```{r echo=FALSE}
+# 观察借款金额和借款利率的关系，选用散点图，添加趋势线
+ggplot(aes(x=借款金额,y=借款利率),data=lc)+
+  geom_point()+
+  geom_smooth()+
+  xlab('loan amount')+
+  ylab('loan rate')
+```
+
+随着借款金额的增加，借款利率开始逐渐降低；当超过300000元后，借款利率呈缓慢上升趋势。
+
+```{r echo=FALSE}
+# 观察借款期限和借款利率的关系，选用散点图，添加趋势线
+ggplot(aes(x=借款期限,y=借款利率),data=lc)+
+  geom_point()+
+  geom_smooth()+
+  xlab('loan period')+
+  ylab('loan rate')
+```
+
+借款期限和借款利率之间无明显关系。
+
+```{r echo=FALSE}
+# 观察初始评级和借款利率的关系,选用箱线图
+ggplot(aes(x=初始评级,y=借款利率),data=lc)+
+  geom_boxplot()+
+  xlab('initial evaluation')+
+  ylab('loan rate')
+```
+
+初始评级越低，借款利率越高。
+
+```{r echo=FALSE}
+# 观察借款类型和借款利率的关系,选用箱线图
+ggplot(aes(x=借款类型,y=借款利率),data=lc)+
+  geom_boxplot()+
+  xlab('type of loans')+
+  ylab('loan rate')
+```
+
+相比起APP闪电，普通以及其他借款类型，电商类型的借款利率较低。
+
+```{r echo=FALSE}
+# 观察初始评级和借款金额的关系，选用箱线图
+ggplot(aes(x=初始评级,y=借款金额),data=lc)+
+  geom_boxplot()+
+  scale_y_log10()+
+  xlab('initial evaluation')+
+  ylab('log10(loan amount)')
+```
+
+初始评级越高，能借到的借款金额越大。
+
+```{r echo=FALSE}
+# 观察年龄段和借款金额的关系，选用箱线图
+ggplot(aes(x=年龄段,y=借款金额),data=lc)+
+  geom_boxplot()+
+  scale_y_log10()+
+  xlab('age group')+
+  ylab('log10(loan amount)')
+```
+
+22岁以下的借款人借款金额较少，22-47岁之间的借款人借款金额增大，高额借款数量增加，47岁以上的借款人高额借款数量减少。
+
+```{r echo=FALSE}
+# 观察历史成功借款金额和借款金额的关系，选用散点图，增加趋势线
+ggplot(aes(x=历史成功借款金额,y=借款金额),data=lc)+
+  geom_jitter(alpha=0.1)+
+  scale_x_log10()+
+  scale_y_log10()+
+  geom_smooth()+
+  xlab('log10(historical successful loan amount)')+
+  ylab('log10(loan amount)')
+```
+
+随着历史成功借款金额的增加，借款金额也持续增加。
+
+```{r echo=FALSE}
+# 观察总待还本金和借款金额的关系，选用散点图，增加趋势线
+ggplot(aes(x=总待还本金,y=借款金额),data=lc)+
+  geom_jitter(alpha=0.5)+
+  scale_x_log10()+
+  scale_y_log10()+
+  geom_smooth()+
+  xlab('log10(total unpaid principal)')+
+  ylab('log10(loan amount)')
+```
+
+随着总待还本金的增加，借款金额也持续增加。
+
+```{r echo=FALSE}
+# 观察历史逾期还款期和借款金额的关系
+ggplot(aes(x=历史逾期还款期数,y=借款金额),data=lc)+
+  scale_x_log10()+
+  scale_y_log10()+
+  geom_smooth()+
+  xlab('log10(number of historical overdue repayment periods)')+
+  ylab('log10(loan amount)')
+```
+
+随着历史逾期还款期数的增加，借款金额也持续增加。
+
+```{r echo=FALSE}
+# 观察年龄和初始评级的关系
+ggplot(aes(x=年龄,y=初始评级),
+         data=subset(lc,历史成功借款金额>0))+
+  geom_point()+
+  xlab('age')+
+  ylab('initial evaluation')
+```
+
+初始评级和年龄没有关系。
+
+# Bivariate Analysis
+
+### Talk about some of the relationships you observed in this part of the investigation. How did the feature(s) of interest vary with other features in the dataset?
+影响借款利率的因素:
+1. 随着借款金额的增加，借款利率开始逐渐降低；当超过300000元后，借款利率呈缓慢上升趋势。
+2. 初始评级越低，借款利率越高。
+3. 相比起APP闪电，普通以及其他借款类型，电商类型的借款利率较低。
+
+影响借款金额的因素:
+1. 初始评级越高，能借到的金额越大。
+2. 22岁以下的借款人借款金额较少，22-47岁之间的借款人借款金额增大，高额借款数量增加，47岁以上的借款人高额借款数量减少。
+3. 随着历史成功借款金额的增加，借款金额也持续增加。
+4. 随着总待还本金的增加，借款金额也持续增加。
+5. 随着历史逾期还款期数的增加，借款金额也持续增加。
+
+### Did you observe any interesting relationships between the other features (not the main feature(s) of interest)?
+初始评级和年龄没有关系。
+
+### What was the strongest relationship you found?
+初始评级越低，借款利率越高。
+
+# Multivariate Plots Section
+```{r echo=FALSE}
+# 观察借款利率,借款金额和借款期限的关系
+ggplot(aes(x=借款利率,y=借款金额,color=借款期限),data=lc)+
+  geom_jitter()+
+  scale_y_log10()+
+  xlab('loan rate')+
+  ylab('log10(loan amount)')+
+  scale_colour_gradient(low = "darksalmon", high = "purple")+
+  labs(colour = 'loan period')
+```
+
+借款期限越长，借款利率越高。
+
+```{r echo=FALSE}
+# 观察借款利率,借款金额和初始评级的关系
+ggplot(aes(x=借款利率,y=借款金额,color=初始评级),data=lc)+
+  geom_point()+
+  xlab('loan rate')+
+  ylab('loan amount')+
+  labs(colour = 'initial evaluation')
+```
+
+初始评级越高,借款利率越低,借款金额相对越大。
+
+```{r echo=FALSE}
+# 观察借款利率,借款金额和借款类型的关系
+ggplot(aes(x=借款利率,y=借款金额,color=借款类型),data=lc)+
+  geom_jitter()+
+  geom_point()+
+  xlab('loan rate')+
+  ylab('loan amount')+
+  labs(colour = 'type of loans')
+```
+
+APP闪电的借款利率较高但借款金额较少，普通的借款类型的借款金额比APP闪电的借款金额要高但借款利率较低，电商的借款金额高但借款利率比较低，其他类型的借款金额比较大但借款利率比较低。
+
+```{r echo=FALSE}
+# 观察借款利率,借款金额和认证评分的关系
+ggplot(aes(x=借款利率,y=借款金额,color=认证评分),data=lc)+
+  geom_jitter()+
+  geom_point()+
+  scale_colour_gradient(low = "darksalmon", high = "purple")+
+  xlab('loan rate')+
+  ylab('loan amount')+
+  labs(colour = 'score')
+```
+
+借款人的认证评分越高，借款金额越大, 和借款利率无关。
+
+# Multivariate Analysis
+
+### Talk about some of the relationships you observed in this part of the investigation. Were there features that strengthened each other in terms of looking at your feature(s) of interest?
+借款金额，借款利率和其他因素之间的关系：
+1. 借款期限越长，借款利率越高。
+2. 初始评级越高，借款利率越低，借款金额越大。
+3. APP闪电的借款利率较高但借款金额较少，普通类型的借款金额比APP闪电的借款金额要高但借款利率较低，电商的借款金额高但借款利率比较低，其他类型的借款金额比较大但借款利率比较低。
+4. 借款人的认证评分越高，借款金额越大。
+
+### Were there any interesting or surprising interactions between features?
+认证评分和借款利率无关。
+
+------
+
+# Final Plots and Summary
+
+### Plot One
+```{r echo=FALSE, Plot_One}
+# 分析借款金额的分布
+ggplot(aes(x=借款金额), data=lc) +
+  geom_histogram(binwidth = 0.1, fill = "#56B4E9") +
+  scale_x_log10(breaks = c(100,500,1000,2000,5000,10000,20000,50000, 100000))+ 
+  geom_vline(xintercept = quantile(lc$借款金额,probs=0.025,na.rm=T),
+             linetype='dashed', color='red')+ 
+  geom_vline(xintercept = quantile(lc$借款金额,probs=0.975,na.rm=T),
+             linetype='dashed', color='red')+
+  xlab('loan amount')+
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+### Description One
+95%置信区间的借款金额在500-12000元之间。
+
+### Plot Two
+```{r echo=FALSE, Plot_Two}
+# 分析借款金额和借款利率的关系
+ggplot(aes(x=借款金额,y=借款利率),data=lc)+
+  geom_smooth()+
+  xlab('loan amount')+
+  ylab('loan rate')+
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+### Description Two
+随着借款金额的增加,借款利率开始逐渐降低;当超过300000元后,借款利率呈缓慢上升趋势。
+
+### Plot Three
+```{r echo=FALSE, Plot_Three}
+# 分析借款金额，借款利率和初始评级之间的关系
+ggplot(aes(x=借款利率,y=借款金额,color=初始评级),data=lc)+
+  geom_jitter()+
+  geom_point()+
+  xlab('loan rate')+
+  ylab('loan amount')+
+  labs(colour = 'initial evaluation')+
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+### Description Three
+初始评级越高,借款利率越低,借款金额相对越大。
+
+------
+
+# Reflection
+在本次的分析报告中，我在探索单变量因素，选取x轴的取值时遇到了很大困难，无法准确估计置信区间的临界值；同时在探索双变量因素，观察到年龄和初始评级没有关系，这与一般常识不符。比较成功的地方在于采用多种图表分析数据，未来将通过增加计算数据集的常用统计量来精确估计置信区间，同时对与一般常识不符的结论需要更多数据进行验证。
+
+
